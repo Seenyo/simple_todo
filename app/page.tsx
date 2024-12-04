@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
-import { DragDropContext, DropResult } from 'react-beautiful-dnd';
 import LoginForm from '@/components/Auth/LoginForm';
 import TimelineGrid from '@/components/Timeline/TimelineGrid';
 import TaskForm from '@/components/Task/TaskForm';
@@ -14,7 +13,6 @@ export default function Home() {
   const [showTaskForm, setShowTaskForm] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const dragStartRef = useRef<{ time: string; element: HTMLElement | null } | null>(null);
 
   const handleLogin = (username: string, password: string) => {
     setUser({ username, password });
@@ -78,91 +76,6 @@ export default function Home() {
     ));
   };
 
-  const handleDragStart = (start: any) => {
-    console.log('Drag started', start);
-    setIsDragging(true);
-
-    // Store the starting time and element
-    const task = tasks.find(t => t.id === start.draggableId);
-    const element = document.querySelector(`[data-rbd-draggable-id="${start.draggableId}"]`) as HTMLElement;
-    if (task && element) {
-      dragStartRef.current = {
-        time: task.startTime,
-        element
-      };
-      console.log('Drag start:', { time: task.startTime, element });
-    }
-  };
-
-  const calculateNewTime = (startTime: string, offsetY: number): string => {
-    const startMinutes = getMinutesFromTime(startTime);
-    const slotChange = Math.round(offsetY / 30); // 30px per slot
-    const newMinutes = startMinutes + (slotChange * 15); // 15 minutes per slot
-
-    // Validate time range (8:00 - 20:00)
-    if (newMinutes < 8 * 60) return '08:00';
-    if (newMinutes >= 20 * 60) return '20:00';
-
-    const hours = Math.floor(newMinutes / 60);
-    const minutes = newMinutes % 60;
-    const time = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-    console.log('Time calculation:', { startTime, offsetY, slotChange, newMinutes, time });
-    return time;
-  };
-
-  const handleDragEnd = (result: DropResult) => {
-    console.log('Drag ended:', result);
-    setIsDragging(false);
-    
-    if (!result.destination || !dragStartRef.current || !dragStartRef.current.element) {
-      console.log('No destination or start position');
-      dragStartRef.current = null;
-      return;
-    }
-
-    const { draggableId, destination } = result;
-
-    if (destination.droppableId === 'delete-zone') {
-      console.log('Dropping in delete zone');
-      handleTaskDelete(draggableId);
-      dragStartRef.current = null;
-      return;
-    }
-
-    // Get the timeline element
-    const timeline = timelineRef.current;
-    if (!timeline) {
-      console.log('Timeline element not found');
-      dragStartRef.current = null;
-      return;
-    }
-
-    // Calculate the vertical offset
-    const startRect = dragStartRef.current.element.getBoundingClientRect();
-    const timelineRect = timeline.getBoundingClientRect();
-    const relativeStartY = startRect.top - timelineRect.top;
-    const slotIndex = Math.round(relativeStartY / 30); // Each slot is 30px
-    const offsetY = (destination.index - slotIndex) * 30;
-
-    console.log('Position calculation:', {
-      startY: startRect.top,
-      timelineTop: timelineRect.top,
-      relativeStartY,
-      slotIndex,
-      destinationIndex: destination.index,
-      offsetY
-    });
-
-    // Calculate new time based on the offset
-    const newTime = calculateNewTime(dragStartRef.current.time, offsetY);
-    if (newTime) {
-      console.log('Moving task to:', newTime);
-      handleTaskMove(draggableId, newTime);
-    }
-
-    dragStartRef.current = null;
-  };
-
   // Helper functions for time calculations
   const getMinutesFromTime = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number);
@@ -175,97 +88,131 @@ export default function Home() {
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
 
+  const handleDragStart = () => {
+    console.log('Drag started');
+    setIsDragging(true);
+  };
+
+  const handleDragStop = (taskId: string, deltaY: number) => {
+    console.log(`Task ${taskId} moved by deltaY: ${deltaY}`);
+    // Calculate the number of 15-minute slots moved
+    const slotChange = Math.round(deltaY / 30); // 30px per slot corresponds to 15 minutes
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const startMinutes = getMinutesFromTime(task.startTime);
+    const newStartMinutes = startMinutes + (slotChange * 15);
+
+    // Validate time range (8:00 - 20:00)
+    if (newStartMinutes < 8 * 60 || newStartMinutes + (getMinutesFromTime(task.endTime) - startMinutes) > 20 * 60) {
+      console.log('New time out of bounds. Reverting to original time.');
+      setIsDragging(false);
+      return; // Do not allow moving outside the timeline
+    }
+
+    const newStartTime = getTimeFromMinutes(newStartMinutes);
+    const newEndMinutes = getMinutesFromTime(task.endTime) + (slotChange * 15);
+    const newEndTime = getTimeFromMinutes(newEndMinutes);
+
+    console.log('Updating task times:', { newStartTime, newEndTime });
+
+    handleTaskMove(taskId, newStartTime);
+    handleTaskDurationChange(taskId, newStartTime, newEndTime);
+    setIsDragging(false);
+  };
+
   return (
-    <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-      <main className="container">
-        {!user ? (
-          <LoginForm onLogin={handleLogin} />
-        ) : (
-          <div className="dashboard">
-            <div className="header">
-              <h1>Welcome, {user.username}</h1>
-              <button onClick={() => setShowTaskForm(true)}>Create Task</button>
-            </div>
-            
-            {showTaskForm && (
-              <div className="modal">
-                <div className="modal-content">
-                  <TaskForm
-                    onSubmit={handleCreateTask}
-                    onCancel={() => setShowTaskForm(false)}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div ref={timelineRef}>
-              <TimelineGrid
-                tasks={tasks}
-                onTaskStatusChange={handleTaskStatusChange}
-                onTaskDelete={handleTaskDelete}
-                onTaskMove={handleTaskMove}
-                onTaskDurationChange={handleTaskDurationChange}
-              />
-            </div>
-
-            <DeleteZone isDragging={isDragging} />
+    <main className="container">
+      {!user ? (
+        <LoginForm onLogin={handleLogin} />
+      ) : (
+        <div className="dashboard">
+          <div className="header">
+            <h1>Welcome, {user.username}</h1>
+            <button onClick={() => setShowTaskForm(true)}>Create Task</button>
           </div>
-        )}
+          
+          {showTaskForm && (
+            <div className="modal">
+              <div className="modal-content">
+                <TaskForm
+                  onSubmit={handleCreateTask}
+                  onCancel={() => setShowTaskForm(false)}
+                />
+              </div>
+            </div>
+          )}
 
-        <style jsx>{`
-          .container {
-            min-height: 100vh;
-            padding: 20px;
-          }
+          <div ref={timelineRef}>
+            <TimelineGrid
+              tasks={tasks}
+              onTaskStatusChange={handleTaskStatusChange}
+              onTaskDelete={handleTaskDelete}
+              onTaskMove={handleTaskMove}
+              onTaskDurationChange={handleTaskDurationChange}
+            />
+          </div>
 
-          .dashboard {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
+          <DeleteZone 
+            isDragging={isDragging} 
+            onDelete={handleTaskDelete}
+          />
+        </div>
+      )}
 
-          .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-          }
+      <style jsx>{`
+        .container {
+          min-height: 100vh;
+          padding: 20px;
+        }
 
-          .header button {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-          }
+        .dashboard {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
 
-          .header button:hover {
-            background: #0056b3;
-          }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
 
-          .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-          }
+        .header button {
+          padding: 8px 16px;
+          background: #007bff;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        }
 
-          .modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-          }
-        `}</style>
-      </main>
-    </DragDropContext>
+        .header button:hover {
+          background: #0056b3;
+        }
+
+        .modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          z-index: 1000;
+        }
+
+        .modal-content {
+          background: white;
+          padding: 20px;
+          border-radius: 8px;
+          max-width: 90%;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+      `}</style>
+    </main>
   );
-} 
+}
