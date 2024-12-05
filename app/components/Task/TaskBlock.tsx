@@ -13,11 +13,13 @@ interface TaskBlockProps {
   onDelete: (id: string) => void;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  onEdit: (task: Task) => void;
 }
 
-const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDurationChange, onDragStop, onDelete, onDragStart, onDragEnd }) => {
-  const nodeRef = React.useRef(null);
+const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDurationChange, onDragStop, onDelete, onDragStart, onDragEnd, onEdit }) => {
+  const nodeRef = React.useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = React.useState(false);
+  const [originalTaskTimes, setOriginalTaskTimes] = React.useState<Map<string, { start: string, end: string }>>(new Map());
 
   const statusButtons = [
     { status: 'pending' as const, label: 'Pending' },
@@ -28,11 +30,31 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
   const handleResizeStart = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
     const startY = e.clientY;
-    const startHeight = e.currentTarget.parentElement?.clientHeight || 0;
+    const taskElement = nodeRef.current;
+    if (!taskElement) return;
+
+    const startHeight = taskElement.clientHeight;
     const timeSlotHeight = 30; // Height of each 15-minute slot
+
+    // Store original times of all tasks
+    const taskElements = document.querySelectorAll('.task-block');
+    const originalTimes = new Map<string, { start: string, end: string }>();
+    taskElements.forEach((element) => {
+      const taskId = element.getAttribute('data-task-id');
+      if (taskId) {
+        const taskData = element.getAttribute('data-task-times');
+        if (taskData) {
+          const { startTime, endTime } = JSON.parse(taskData);
+          originalTimes.set(taskId, { start: startTime, end: endTime });
+        }
+      }
+    });
+    setOriginalTaskTimes(originalTimes);
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       moveEvent.preventDefault();
+      if (!taskElement) return;
+
       const deltaY = moveEvent.clientY - startY;
       const newHeight = Math.max(timeSlotHeight, startHeight + deltaY);
       const newDurationSlots = Math.round(newHeight / timeSlotHeight);
@@ -44,14 +66,85 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
         const newEndHour = Math.floor(newEndMinutes / 60);
         const newEndMinute = newEndMinutes % 60;
         const newEndTime = `${newEndHour.toString().padStart(2, '0')}:${newEndMinute.toString().padStart(2, '0')}`;
-        
+
+        // Only update the resizing task during mouse move
         onDurationChange(task.id, task.startTime, newEndTime);
       }
     };
 
     const handleMouseUp = () => {
+      if (!taskElement || !onDurationChange) return;
+
+      // Get the current times of the resized task
+      const resizedTaskData = taskElement.getAttribute('data-task-times');
+      if (!resizedTaskData) return;
+      
+      const { startTime: resizedStartTime, endTime: resizedEndTime } = JSON.parse(resizedTaskData);
+      const resizedStart = timeToMinutes(resizedStartTime);
+      const resizedEnd = timeToMinutes(resizedEndTime);
+
+      // Check for conflicts after resize is complete
+      const taskElements = document.querySelectorAll('.task-block');
+      const overlappingTasks: string[] = [];
+
+      // Find all overlapping tasks using time comparison
+      taskElements.forEach((element) => {
+        const taskId = element.getAttribute('data-task-id');
+        const taskData = element.getAttribute('data-task-times');
+        if (taskId && taskId !== task.id && taskData) {
+          const { startTime, endTime } = JSON.parse(taskData);
+          const taskStart = timeToMinutes(startTime);
+          const taskEnd = timeToMinutes(endTime);
+
+          // Check if times overlap
+          if (resizedEnd > taskStart && resizedStart < taskEnd) {
+            overlappingTasks.push(taskId);
+          }
+        }
+      });
+
+      if (overlappingTasks.length > 0) {
+        // Sort overlapping tasks by their start time
+        overlappingTasks.sort((aId, bId) => {
+          const aData = document.querySelector(`[data-task-id="${aId}"]`)?.getAttribute('data-task-times');
+          const bData = document.querySelector(`[data-task-id="${bId}"]`)?.getAttribute('data-task-times');
+          if (!aData || !bData) return 0;
+          
+          const { startTime: aStart } = JSON.parse(aData);
+          const { startTime: bStart } = JSON.parse(bData);
+          return timeToMinutes(aStart) - timeToMinutes(bStart);
+        });
+
+        let lastEndTime = resizedEndTime;
+
+        // Adjust overlapping tasks
+        overlappingTasks.forEach((id) => {
+          const originalTime = originalTaskTimes.get(id);
+          if (originalTime) {
+            const duration = timeToMinutes(originalTime.end) - timeToMinutes(originalTime.start);
+            const newStartTime = lastEndTime;
+            const newEndTime = minutesToTime(timeToMinutes(lastEndTime) + duration);
+
+            onDurationChange(id, newStartTime, newEndTime);
+            lastEndTime = newEndTime;
+          }
+        });
+      }
+
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    // Helper functions for time conversion
+    const timeToMinutes = (time: string): number => {
+      const [hours, minutes] = time.split(':').map(Number);
+      return hours * 60 + minutes;
+    };
+
+    const minutesToTime = (minutes: number): string => {
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -60,7 +153,7 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
 
   const handleDrag: DraggableEventHandler = (e, data) => {
     if (nodeRef.current) {
-      const el = nodeRef.current as HTMLElement;
+      const el = nodeRef.current;
       const snappedY = Math.round(data.y / 30) * 30;
       el.style.transform = `translateY(${snappedY}px)`;
       el.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
@@ -76,7 +169,7 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
 
   const handleDragStop: DraggableEventHandler = (e, data) => {
     if (nodeRef.current) {
-      const el = nodeRef.current as HTMLElement;
+      const el = nodeRef.current;
       el.style.boxShadow = '';
       el.style.zIndex = '';
       el.style.transform = '';
@@ -103,25 +196,39 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
     setIsDragging(false);
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onEdit(task);
+  };
+
   return (
     <DraggableCore 
       onStart={handleDragStart}
       onDrag={handleDrag}
       onStop={handleDragStop}
       nodeRef={nodeRef}
-      handle=".task-header"
+      handle=".drag-handle"
     >
       <div
         ref={nodeRef}
         className={`task-block status-${task.status}`}
         data-task-id={task.id}
+        data-task-times={JSON.stringify({ startTime: task.startTime, endTime: task.endTime })}
         style={{ cursor: 'default' }}
+        onContextMenu={handleContextMenu}
       >
         <div className="task-content">
-          <div className="task-header" style={{ cursor: 'move' }}>
-            <h3>{task.title}</h3>
-            <div className="task-time">
-              {task.startTime} - {task.endTime}
+          <div className="drag-handle">
+            <div className="drag-dots">
+              <span />
+            </div>
+          </div>
+          <div className="task-header">
+            <div className="title-time">
+              <h3>{task.title}</h3>
+              <div className="task-time">
+                {task.startTime} - {task.endTime}
+              </div>
             </div>
           </div>
           {task.details && <p className="task-details">{task.details}</p>}
@@ -162,10 +269,6 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
             cursor: default;
           }
 
-          .task-block.draggable {
-            cursor: move;
-          }
-
           .task-content {
             flex: 1;
             display: flex;
@@ -173,18 +276,57 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
             min-height: 0;
           }
 
+          .drag-handle {
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: -4px 0 4px;
+          }
+
+          .drag-dots {
+            position: relative;
+            height: 100%;
+            width: 36px;
+            cursor: move;
+            padding: 10px 12px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          }
+
+          .drag-dots::before,
+          .drag-dots::after,
+          .drag-dots span {
+            content: '';
+            width: 4px;
+            height: 4px;
+            border-radius: 50%;
+            background-color: #666;
+          }
+
+          .drag-dots span {
+            display: inline-block;
+          }
+
+          .drag-dots:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+          }
+
           .task-header {
             display: flex;
             justify-content: space-between;
-            align-items: flex-start;
+            align-items: center;
             margin-bottom: 4px;
           }
 
-          .task-time {
-            font-size: 12px;
-            color: #666;
-            white-space: nowrap;
-            margin-left: 8px;
+          .title-time {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
           }
 
           h3 {
@@ -194,7 +336,14 @@ const TaskBlock: React.FC<TaskBlockProps> = ({ task, index, onStatusChange, onDu
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            flex: 1;
+            flex-shrink: 1;
+            min-width: 0;
+          }
+
+          .task-time {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
           }
 
           .task-details {

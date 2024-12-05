@@ -10,6 +10,8 @@ interface TimelineGridProps {
   onTaskMove: (taskId: string, newStartTime: string) => void;
   onTaskDurationChange: (taskId: string, newStartTime: string, newEndTime: string) => void;
   onTaskDelete: (taskId: string) => void;
+  onDateChange: (date: Date) => void;
+  onEdit: (task: Task) => void;
 }
 
 const TimelineGrid: React.FC<TimelineGridProps> = ({
@@ -18,6 +20,8 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
   onTaskMove,
   onTaskDurationChange,
   onTaskDelete,
+  onDateChange,
+  onEdit
 }) => {
   const [scale, setScale] = React.useState(30); // pixels per 15 minutes
   const [scrollPosition, setScrollPosition] = React.useState(0);
@@ -56,6 +60,20 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     }
   }, [selectedDate, scale]);
 
+  const handleDateChange = (days: number) => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(selectedDate.getDate() + days);
+    setSelectedDate(newDate);
+    onDateChange(newDate);
+  };
+
+  const goToToday = () => {
+    const today = new Date();
+    setSelectedDate(today);
+    setScrollPosition(0);
+    onDateChange(today);
+  };
+
   // Generate time slots from 8 AM to 12 PM (midnight) in 15-minute intervals
   const timeSlots = Array.from({ length: 65 }, (_, index) => { // 65 slots for 16 hours (8AM-12PM)
     const hour = Math.floor(index / 4) + 8;
@@ -79,17 +97,6 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
       e.preventDefault();
       setScrollPosition(prev => Math.min(Math.max(0, prev + e.deltaY), 1440 * scale - (containerRef.current?.clientWidth || 0)));
     }
-  };
-
-  const handleDateChange = (days: number) => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(selectedDate.getDate() + days);
-    setSelectedDate(newDate);
-  };
-
-  const goToToday = () => {
-    setSelectedDate(new Date());
-    setScrollPosition(0);
   };
 
   const getMinutesFromTime = (time: string) => {
@@ -174,6 +181,14 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     onTaskDurationChange(taskId, newStartTime, newEndTime);
   };
 
+  const handleDragStart = () => {
+    setIsDraggingTask(true);
+  };
+
+  const handleDragEnd = () => {
+    setIsDraggingTask(false);
+  };
+
   return (
     <div className="timeline-container" ref={containerRef}>
       <div className="timeline-controls">
@@ -250,8 +265,9 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
                   onDurationChange={onTaskDurationChange}
                   onDragStop={handleDragStop}
                   onDelete={onTaskDelete}
-                  onDragStart={() => setIsDraggingTask(true)}
-                  onDragEnd={() => setIsDraggingTask(false)}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onEdit={onEdit}
                 />
               </div>
             ))}
