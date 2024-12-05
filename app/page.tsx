@@ -6,6 +6,8 @@ import TimelineGrid from '@/components/Timeline/TimelineGrid';
 import TaskForm from '@/components/Task/TaskForm';
 import DeleteZone from '@/components/Task/DeleteZone';
 import TagFilter from '@/components/Task/TagFilter';
+import ProgressIndicator from '@/components/ProgressIndicator';
+import TaskAnalytics from '@/components/Analytics/TaskAnalytics';
 import { User, Task } from '@/types';
 import { saveTasksToStorage, loadTasksFromStorage, formatDate } from '@/utils/storage';
 
@@ -26,6 +28,7 @@ export default function Home() {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // Load tasks when user logs in or date changes
   useEffect(() => {
@@ -389,19 +392,32 @@ export default function Home() {
         <div className="dashboard">
           <div className="header">
             <h1>Welcome, {user.username}</h1>
-            <button onClick={() => {
-              setEditingTask(null);
-              setShowTaskForm(true);
-            }}>Create Task</button>
+            <div className="header-controls">
+              <button onClick={() => setShowAnalytics(!showAnalytics)} className="analytics-toggle">
+                {showAnalytics ? 'Show Timeline' : 'Show Analytics'}
+              </button>
+              {!showAnalytics && (
+                <button onClick={() => {
+                  setEditingTask(null);
+                  setShowTaskForm(true);
+                }}>Create Task</button>
+              )}
+            </div>
           </div>
 
-          <TagFilter
-            availableTags={availableTags}
-            selectedTags={selectedTags}
-            onTagSelect={handleTagSelect}
-          />
+          {!showAnalytics && (
+            <>
+              <TagFilter
+                availableTags={availableTags}
+                selectedTags={selectedTags}
+                onTagSelect={handleTagSelect}
+              />
+
+              <ProgressIndicator tasks={tasks} />
+            </>
+          )}
           
-          {showTaskForm && (
+          {showTaskForm && !showAnalytics && (
             <div className="modal">
               <div className="modal-content">
                 <TaskForm
@@ -417,7 +433,7 @@ export default function Home() {
             </div>
           )}
 
-          {conflictInfo && (
+          {conflictInfo && !showAnalytics && (
             <div className="modal">
               <div className="modal-content warning">
                 <h3>Time Conflict Warning</h3>
@@ -442,22 +458,30 @@ export default function Home() {
             </div>
           )}
 
-          <div ref={timelineRef}>
-            <TimelineGrid
-              tasks={filteredTasks}
-              onTaskStatusChange={handleTaskStatusChange}
-              onTaskDelete={handleTaskDelete}
-              onTaskMove={handleTaskMove}
-              onTaskDurationChange={handleTaskDurationChange}
-              onDateChange={handleDateChange}
-              onEdit={handleEditTask}
-            />
-          </div>
+          {showAnalytics ? (
+            <div className="analytics-view">
+              <TaskAnalytics tasks={tasks} />
+            </div>
+          ) : (
+            <div ref={timelineRef}>
+              <TimelineGrid
+                tasks={filteredTasks}
+                onTaskStatusChange={handleTaskStatusChange}
+                onTaskDelete={handleTaskDelete}
+                onTaskMove={handleTaskMove}
+                onTaskDurationChange={handleTaskDurationChange}
+                onDateChange={handleDateChange}
+                onEdit={handleEditTask}
+              />
+            </div>
+          )}
 
-          <DeleteZone 
-            isDragging={isDragging} 
-            onDelete={handleTaskDelete}
-          />
+          {!showAnalytics && (
+            <DeleteZone 
+              isDragging={isDragging} 
+              onDelete={handleTaskDelete}
+            />
+          )}
         </div>
       )}
 
@@ -479,6 +503,12 @@ export default function Home() {
           margin-bottom: 20px;
         }
 
+        .header-controls {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+
         .header button {
           padding: 8px 16px;
           background: #007bff;
@@ -486,10 +516,26 @@ export default function Home() {
           border: none;
           border-radius: 4px;
           cursor: pointer;
+          transition: all 0.2s ease;
         }
 
         .header button:hover {
           background: #0056b3;
+        }
+
+        .header button.analytics-toggle {
+          background: #6c757d;
+        }
+
+        .header button.analytics-toggle:hover {
+          background: #5a6268;
+        }
+
+        .analytics-view {
+          background: white;
+          border-radius: 8px;
+          padding: 20px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .modal {
