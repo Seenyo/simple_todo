@@ -459,9 +459,11 @@ export default function Home() {
           )}
 
           {showAnalytics ? (
-            <div className="analytics-view">
-              <TaskAnalytics tasks={tasks} />
-            </div>
+            <TaskAnalytics 
+              tasks={tasks} 
+              userId={user.username} 
+              selectedDate={selectedDate}
+            />
           ) : (
             <div ref={timelineRef}>
               <TimelineGrid

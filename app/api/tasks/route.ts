@@ -3,6 +3,12 @@ import { writeFile, readFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { Task } from '@/types';
 
+interface Storage {
+  [userId: string]: {
+    [date: string]: Task[];
+  };
+}
+
 const getStoragePath = (userId: string) => {
   const storagePath = join(process.cwd(), 'storage', userId);
   return {
@@ -49,7 +55,7 @@ export async function POST(request: Request) {
     await mkdir(dirPath, { recursive: true });
 
     // Load existing data or create new storage object
-    let storage = {};
+    let storage: Storage = {};
     try {
       const existingData = await readFile(filePath, 'utf8');
       storage = JSON.parse(existingData);

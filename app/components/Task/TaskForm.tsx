@@ -120,7 +120,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, existingTags = 
             value={startTime}
             onChange={handleStartTimeChange}
             min="08:00"
-            max="20:00"
+            max="24:00"
             step="900"
             required
           />
@@ -134,7 +134,7 @@ const TaskForm: React.FC<TaskFormProps> = ({ onSubmit, onCancel, existingTags = 
             value={endTime}
             onChange={handleEndTimeChange}
             min="08:00"
-            max="20:00"
+            max="24:00"
             step="900"
             required
           />

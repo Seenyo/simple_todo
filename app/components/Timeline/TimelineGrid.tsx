@@ -74,8 +74,8 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     onDateChange(today);
   };
 
-  // Generate time slots from 8 AM to 12 PM (midnight) in 15-minute intervals
-  const timeSlots = Array.from({ length: 65 }, (_, index) => { // 65 slots for 16 hours (8AM-12PM)
+  // Generate time slots from 8 AM to 24:00 (midnight) in 15-minute intervals
+  const timeSlots = Array.from({ length: 65 }, (_, index) => { // 65 slots for 16 hours (8AM-24:00)
     const hour = Math.floor(index / 4) + 8;
     const minute = (index % 4) * 15;
     const formattedHour = hour.toString().padStart(2, '0');
@@ -141,7 +141,7 @@ const TimelineGrid: React.FC<TimelineGridProps> = ({
     const duration = getMinutesFromTime(task.endTime) - startMinutes;
     const newStartMinutes = startMinutes + minutesMoved;
 
-    // Validate time range (8:00 AM - 12:00 PM)
+    // Validate time range (8:00 - 24:00)
     if (newStartMinutes < 8 * 60 || newStartMinutes + duration > 24 * 60) {
       return; // Do not allow moving outside the timeline
     }

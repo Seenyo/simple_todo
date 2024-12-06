@@ -28,4 +28,97 @@
   height: 300px;
   width: 100%;
   margin: 0 auto;
+}
+
+.tagStatsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.tagStatCard {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s ease;
+}
+
+.tagStatCard:hover {
+  transform: translateY(-2px);
+}
+
+.tagStatCard h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.tagStatDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tagStatDetails p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.completionRateContainer {
+  position: relative;
+  height: 24px;
+  background: #eee;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.completionRateBar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.3s ease;
+  opacity: 0.8;
+}
+
+.completionRateContainer span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: #333;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.taskCount {
+  text-align: center;
+  font-weight: 500 !important;
+  color: #555 !important;
+}
+
+.customTooltip {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 4px;
+  padding: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid #eee;
+}
+
+.tooltipLabel {
+  margin: 0 0 8px 0;
+  font-weight: 500;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.customTooltip p {
+  margin: 4px 0;
+  font-size: 0.85rem;
 } 

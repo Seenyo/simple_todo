@@ -11,4 +11,5 @@ export interface Task {
   endTime: string; // Format: HH:mm
   tags: string[];
   status: 'pending' | 'in-progress' | 'complete';
+  date?: string; // ISO date string
 } 
